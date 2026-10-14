@@ -33,8 +33,10 @@
 **月次計上（ct_calc_month）**：Excel「02_月次費用」の判定を再現しています。
 
 - 月次×月額 → 月額をそのまま計上
-- 年次×年額 → 年額÷12（切捨て）を毎月計上し、**年払対象開始月**に端数を調整
+- 年次×年額（または一括） → 年額÷12（切捨て）を毎月計上し、**年払対象開始月**に端数を調整
+- 半年×年額（または一括） → 契約金額を**半年分**として÷6 を毎月計上し、対象開始月とその6か月後に端数を調整
 - 従量・手入力 → その月の実績（税抜）を入力した契約のみ計上
+- 月次契約で支払区分が未設定・不明なものは、計上はしますが「支払区分未設定（支払仕訳が作られません）」を確認事項に出します
 - 消費税は契約の消費税額（未入力なら税抜×税率の切捨て）
 
 **仕訳生成（ct_generate_month）**：経過勘定は**税込**で管理します。
@@ -46,7 +48,7 @@
 | 支払（年払い） | 経過勘定（年額税込） | 預金 1120 |
 
 支払仕訳の時期は「当月分 支払月」で決まります（当月払い＝当月、翌月払い/翌月末＝翌月、翌々月払い＝2か月後、
-前月払い＝前月に翌月分を支払）。年次契約は「年払い 支払月」に年額を支払います。
+前月払い＝前月に翌月分を支払）。年次契約は「年払い 支払月」に年額を、半年契約は支払月とその6か月後に半年分を支払います。
 例：年払いの前払費用は支払月に計上され、毎月の費用計上で取り崩されます。
 支払仕訳が不要な場合は、マスタ → 設定 `auto_payment` を `false` にしてください（その場合は会計ソフト側の支払仕訳と残高を突き合わせます）。
 
@@ -61,14 +63,29 @@
 
 ### 1. データベース（Supabase：fixed-asset-ledger）
 
-`supabase/migrations/20261014000001_ct_schema.sql` を適用します（SQL Editor に貼り付けて実行、または Supabase CLI で `supabase db push`）。
+`supabase/migrations/` の SQL をファイル名の順に適用します（SQL Editor に貼り付けて実行、または Supabase CLI で `supabase db push`）。
 既存テーブルは変更しません。
 
 ### 2. 初期データ（Excelからの取込）
 
+Windows（Python・Excel 不要）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\import_excel.ps1 -Path "01.定期契約マスタ.xlsx"
+```
+
+Python がある環境：
+
 ```bash
 python3 -m pip install openpyxl
 python3 scripts/import_excel.py "01.定期契約マスタ.xlsx" > supabase/seed/seed_data.sql
+```
+
+どちらも `supabase/seed/seed_data.sql` を作ります（取込ルールは同じ）。投入前に次のコマンドで、
+マイグレーション＋テスト＋初期データがローカルの PostgreSQL（PGlite）で通ることを確認できます。
+
+```bash
+npm run test:db -- --seed supabase/seed/seed_data.sql
 ```
 
 生成された SQL を SQL Editor で実行します。物件・勘定科目（科目登録リスト）・選択肢・取引先・契約を投入します（再実行しても重複しません）。
@@ -116,8 +133,10 @@ npm run build          # dist/ を静的ホスティングへ
 
 ```
 supabase/migrations/   テーブル・RLS・関数（計上計算・仕訳生成・残高集計・開始残高推定）
-supabase/tests/        ローカルPostgreSQLで実行する検証SQL
-scripts/import_excel.py Excel → 初期データSQL
+supabase/tests/        検証SQL（CI は PostgreSQL、ローカルは npm run test:db で PGlite）
+scripts/import_excel.ps1 Excel → 初期データSQL（Windows 用、Python 不要）
+scripts/import_excel.py  Excel → 初期データSQL（Python 版）
+scripts/test-db.mjs    PGlite でマイグレーション・テスト・初期データを検証
 src/pages/             各画面
 src/lib/csv.ts         仕訳CSV（28列・Shift_JIS）
 ```

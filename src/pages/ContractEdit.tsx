@@ -27,10 +27,13 @@ const blank = (): Partial<Contract> => ({
   accounting_only: false,
 })
 
+/** 支払仕訳を自動で作れる支払区分（DB の ct_payment_lag と同じ） */
+const PAYMENT_TIMINGS = ['前月払い', '当月払い', '翌月払い', '翌月末', '翌々月払い']
+
 /** Excel「相手科目コード」の自動判定と同じルール */
 function suggestCounter(c: Partial<Contract>): number | null {
   if (c.txn_type !== '費用') return null
-  if (c.billing_cycle === '年次') return (c.annual_period_note ?? '').includes('前年') ? 3150 : 1550
+  if (c.billing_cycle === '年次' || c.billing_cycle === '半年') return (c.annual_period_note ?? '').includes('前年') ? 3150 : 1550
   switch (c.payment_timing) {
     case '前月払い':
     case '年払い':
@@ -140,15 +143,18 @@ export default function ContractEdit() {
   }, [isNew, form.property_code, masters.properties])
 
   const allocTotal = allocs.reduce((a, b) => a + Number(b.amount_excl || 0), 0)
+  const isCycle = form.billing_cycle === '年次' || form.billing_cycle === '半年'
   const issues = useMemo(() => {
     const out: string[] = []
     if ((form.status === '解約予定' || form.status === '解約済') && !form.cancel_date) out.push('解約日を入力してください')
     if (form.amount_excl == null && !['従量', '手入力'].includes(form.amount_basis ?? '')) out.push('金額が未入力です')
     if (!form.pl_account_code) out.push('損益科目が未入力です')
     if (!form.counter_account_code) out.push('相手科目が未入力です')
-    if (form.billing_cycle === '年次' && !form.annual_payment_month) out.push('年払いの支払月を選んでください')
-    if (form.billing_cycle === '年次' && !form.annual_start_month) out.push('年払いの対象開始月を選んでください')
-    if (form.billing_cycle === '年次' && form.amount_basis !== '年額') out.push('年次契約は金額基準を「年額」にしてください')
+    if (isCycle && !form.annual_payment_month) out.push('年払いの支払月を選んでください')
+    if (isCycle && !form.annual_start_month) out.push('年払いの対象開始月を選んでください')
+    if (isCycle && !['年額', '一括'].includes(form.amount_basis ?? '')) out.push('年次・半年契約は金額基準を「年額」または「一括」にしてください')
+    if (form.billing_cycle === '月次' && form.is_active && !PAYMENT_TIMINGS.includes(form.payment_timing ?? ''))
+      out.push('支払区分（当月分の支払月）が未設定のため、支払仕訳が作られません')
     if (allocs.length > 0 && form.amount_excl != null && allocTotal !== Number(form.amount_excl))
       out.push(`按分合計（${yen(allocTotal)}）が税抜契約金額と一致していません（按分比率として使います）`)
     return out
@@ -421,9 +427,9 @@ export default function ContractEdit() {
                 <Select value={form.amount_basis} onChange={(v) => upd('amount_basis', v || null)} options={options('amount_basis')} />
               </Field>
               <Field label="初回請求日"><input type="date" value={form.first_billing_date ?? ''} onChange={(e) => upd('first_billing_date', e.target.value || null)} /></Field>
-              {form.billing_cycle === '年次' && (
+              {isCycle && (
                 <>
-                  <Field label="年払い 支払月">
+                  <Field label="年払い 支払月" hint={form.billing_cycle === '半年' ? 'この月と6か月後に支払います' : undefined}>
                     <Select value={form.annual_payment_month} onChange={(v) => upd('annual_payment_month', v ? Number(v) : null)} options={MONTHS} />
                   </Field>
                   <Field label="年払い 対象開始月" hint="この月に端数を調整します">
@@ -437,7 +443,7 @@ export default function ContractEdit() {
               <Field label="税区分">
                 <Select value={form.tax_code} onChange={(v) => upd('tax_code', v || null)} options={masters.taxCodes.map((t) => t.name)} />
               </Field>
-              <Field label={form.amount_basis === '年額' ? '税抜契約金額（年額）' : '税抜契約金額'}>
+              <Field label={isCycle && form.billing_cycle === '半年' ? '税抜契約金額（半年分）' : form.amount_basis === '年額' ? '税抜契約金額（年額）' : '税抜契約金額'}>
                 <MoneyInput value={form.amount_excl} onChange={(v) => upd('amount_excl', v)} />
               </Field>
               <Field label="消費税" hint={taxAuto ? `自動計算（${Number(rate) * 100}%・切捨て）` : '手入力'}>
