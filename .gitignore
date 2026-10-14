@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.env.local
+# 実データ（取引先・金額）を含む初期投入SQLはリポジトリに含めない
+supabase/seed/*.sql
+*.xlsx
+*.tsbuildinfo
