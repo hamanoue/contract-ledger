@@ -219,7 +219,9 @@ export default function Monthly() {
                     <td className="ellipsis" title={r.contract_name}>{r.contract_name}</td>
                     <td className="small nowrap">
                       {r.billing_cycle}・{r.amount_basis}
-                      <div className="muted">{r.billing_cycle === '年次' && r.annual_payment_month ? `毎年${r.annual_payment_month}月払` : r.payment_timing}</div>
+                      <div className="muted">{r.billing_cycle === '年次' && r.annual_payment_month ? `毎年${r.annual_payment_month}月払`
+                        : r.billing_cycle === '半年' && r.annual_payment_month ? `${r.annual_payment_month}月・${((r.annual_payment_month + 5) % 12) + 1}月払`
+                        : r.payment_timing}</div>
                     </td>
                     <td className="r">
                       {variable && r.judgement !== '対象外' && r.judgement !== '要設定' ? (
