@@ -83,6 +83,9 @@ export default function ContractEdit() {
   const [showRev, setShowRev] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  const taxCodesRef = useRef(masters.taxCodes)
+  taxCodesRef.current = masters.taxCodes
+
   // 読み込み・保存した時点の内容。これと違えば「未保存の変更あり」
   const baseline = useRef(snapshotOf(blank(), [], []))
   const dirty = !loading && snapshotOf(form, allocs, items) !== baseline.current
@@ -116,7 +119,7 @@ export default function ContractEdit() {
         setItems(check(it) as ContractItem[])
         setHistory(check(h) as HistoryRow[])
         setVersions(check(v) as Contract[])
-        const rate = masters.taxCodes.find((t) => t.name === c.tax_code)?.rate ?? 0
+        const rate = taxCodesRef.current.find((t) => t.name === c.tax_code)?.rate ?? 0
         setTaxAuto(c.amount_excl === null || Math.floor(Number(c.amount_excl) * Number(rate)) === Number(c.tax_amount))
       } catch (e) {
         setError((e as Error).message)
@@ -124,7 +127,8 @@ export default function ContractEdit() {
         setLoading(false)
       }
     })()
-  }, [id, isNew, masters.taxCodes])
+    // マスタの読み直しで契約を読み込み直すと入力中の内容が上書きされるため、依存は契約の切り替えだけにする
+  }, [id, isNew])
 
   const readOnly = !canEdit || (Boolean(form.accounting_only) && !isAccounting)
   const rate = masters.taxCodes.find((t) => t.name === form.tax_code)?.rate ?? 0
