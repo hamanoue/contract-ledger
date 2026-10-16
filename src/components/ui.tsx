@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Account } from '../lib/types'
+import { parseDateInput } from '../lib/format'
 
 export function PageHeader({ title, sub, actions }: { title: string; sub?: ReactNode; actions?: ReactNode }) {
   return (
@@ -130,6 +131,54 @@ export function MoneyInput({ value, onChange, disabled, placeholder }: {
         else if (/^-?\d+$/.test(s)) onChange(Number(s))
       }}
     />
+  )
+}
+
+/**
+ * 日付入力。年・月・日に分かれず「2026/10/1」「20261001」などを一度に打てる。
+ * 値は 'YYYY-MM-DD'（未入力は null）。右のボタンからカレンダーでも選べる。
+ */
+export function DateInput({ value, onChange, disabled }: {
+  value: string | null | undefined
+  onChange: (v: string | null) => void
+  disabled?: boolean
+}) {
+  const show = (v: string | null | undefined) => (v ? v.slice(0, 10).replaceAll('-', '/') : '')
+  const [text, setText] = useState(show(value))
+  const [bad, setBad] = useState(false)
+  const focus = useRef(false)
+  const picker = useRef<HTMLInputElement>(null)
+  // 外から値が変わったとき（読み込み・カレンダー選択）だけ表示を合わせる。
+  // 入力欄から離れたタイミングでは表示を戻さない（読めない日付の警告を残すため）
+  useEffect(() => {
+    if (!focus.current) { setText(show(value)); setBad(false) }
+  }, [value])
+  const commit = (t: string) => {
+    const v = parseDateInput(t)
+    if (v === undefined) { setBad(true); return }
+    setBad(false)
+    setText(show(v))
+    if (v !== (value ?? null)) onChange(v)
+  }
+  return (
+    <span className={`date-input${bad ? ' invalid' : ''}`}>
+      <input
+        value={text}
+        disabled={disabled}
+        inputMode="numeric"
+        placeholder="年/月/日"
+        title="例：2026/10/1・20261001・10/1（今年）"
+        onFocus={() => { focus.current = true }}
+        onBlur={(e) => { focus.current = false; commit(e.target.value) }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(e.currentTarget.value) } }}
+        onChange={(e) => { setText(e.target.value); setBad(false) }}
+      />
+      <button type="button" className="small" disabled={disabled} aria-label="カレンダーから選ぶ"
+        onClick={(e) => { e.preventDefault(); picker.current?.showPicker?.() }}>📅</button>
+      <input ref={picker} type="date" tabIndex={-1} aria-hidden className="date-input-picker" value={value ?? ''}
+        onChange={(e) => onChange(e.target.value || null)} />
+      {bad && <span className="field-error">日付として読めません（例：2026/10/1）</span>}
+    </span>
   )
 }
 

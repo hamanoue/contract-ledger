@@ -4,8 +4,8 @@ import { supabase, check } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import type { Allocation, Contract, ContractItem, HistoryRow } from '../lib/types'
 import { FIELD_LABELS } from '../lib/types'
-import { dateJa, yen } from '../lib/format'
-import { AccountSelect, Badge, ErrorBox, Field, Loading, MoneyInput, Notice, PageHeader, Select, judgementTone } from '../components/ui'
+import { dateJa, subtractMonths, yen } from '../lib/format'
+import { AccountSelect, Badge, DateInput, ErrorBox, Field, Loading, MoneyInput, Notice, PageHeader, Select, judgementTone } from '../components/ui'
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `${i + 1}月` }))
 
@@ -144,6 +144,9 @@ export default function ContractEdit() {
 
   const allocTotal = allocs.reduce((a, b) => a + Number(b.amount_excl || 0), 0)
   const isCycle = form.billing_cycle === '年次' || form.billing_cycle === '半年'
+  const noticeDeadline = form.service_end && form.notice_months != null
+    ? `${dateJa(subtractMonths(form.service_end, form.notice_months))}（終了日 ${dateJa(form.service_end)} の${form.notice_months}か月前）`
+    : null
   const issues = useMemo(() => {
     const out: string[] = []
     if ((form.status === '解約予定' || form.status === '解約済') && !form.cancel_date) out.push('解約日を入力してください')
@@ -283,7 +286,7 @@ export default function ContractEdit() {
           </p>
           <div className="row">
             <Field label="改定後の開始日">
-              <input type="date" value={revDate} onChange={(e) => setRevDate(e.target.value)} />
+              <DateInput value={revDate || null} onChange={(v) => setRevDate(v ?? '')} />
             </Field>
             <button className="primary" onClick={createRevision} disabled={busy}>枝番を作成して編集</button>
             <button onClick={() => setShowRev(false)}>やめる</button>
@@ -392,24 +395,31 @@ export default function ContractEdit() {
               <Field label="契約担当者">
                 <input value={form.person_in_charge ?? ''} onChange={(e) => upd('person_in_charge', e.target.value)} />
               </Field>
+              <Field label="備考" wide>
+                <textarea rows={2} value={form.trade_note ?? ''} onChange={(e) => upd('trade_note', e.target.value || null)}
+                  placeholder="取引先・管理に関するメモ（担当窓口、連絡先、引継ぎ事項など）" />
+              </Field>
             </div>
           </section>
 
           <section className="card">
             <h2>契約期間・更新</h2>
             <div className="grid">
-              <Field label="契約締結日"><input type="date" value={form.signed_date ?? ''} onChange={(e) => upd('signed_date', e.target.value || null)} /></Field>
-              <Field label="サービス開始日"><input type="date" value={form.service_start ?? ''} onChange={(e) => upd('service_start', e.target.value || null)} /></Field>
-              <Field label="サービス終了日"><input type="date" value={form.service_end ?? ''} onChange={(e) => upd('service_end', e.target.value || null)} /></Field>
-              <Field label="解約日" hint="解約予定・解約済の場合は必須"><input type="date" value={form.cancel_date ?? ''} onChange={(e) => upd('cancel_date', e.target.value || null)} /></Field>
+              <Field label="契約締結日"><DateInput value={form.signed_date} onChange={(v) => upd('signed_date', v)} /></Field>
+              <Field label="サービス開始日"><DateInput value={form.service_start} onChange={(v) => upd('service_start', v)} /></Field>
+              <Field label="サービス終了日"><DateInput value={form.service_end} onChange={(v) => upd('service_end', v)} /></Field>
+              <Field label="解約日" hint="解約予定・解約済の場合は必須"><DateInput value={form.cancel_date} onChange={(v) => upd('cancel_date', v)} /></Field>
               <Field label="更新区分">
                 <Select value={form.renewal_type} onChange={(v) => upd('renewal_type', v || null)} options={options('renewal_type')} />
               </Field>
-              <Field label="解約通知（何か月前）" hint="ダッシュボードの期限アラートに使います">
+              <Field label="解約通知（何か月前）" hint="期限日を自動計算し、ダッシュボードで通知します">
                 <input type="number" min={0} max={36} value={form.notice_months ?? ''} onChange={(e) => upd('notice_months', e.target.value ? Number(e.target.value) : null)} />
               </Field>
-              <Field label="解約通知期限（メモ）" wide>
-                <input value={form.renewal_notice ?? ''} onChange={(e) => upd('renewal_notice', e.target.value)} placeholder="例：3ヶ月前書面通知" />
+              <Field label="解約通知期限（自動計算）">
+                <span className="field-note">{noticeDeadline ?? '終了日と「何か月前」を入れると表示します'}</span>
+              </Field>
+              <Field label="解約通知の方法・条件" wide hint="期限は上の「何か月前」で管理します。ここには通知の方法や条件だけを書きます">
+                <input value={form.renewal_notice ?? ''} onChange={(e) => upd('renewal_notice', e.target.value || null)} placeholder="例：書面で通知／更新の1か月前までに申し出" />
               </Field>
             </div>
           </section>
@@ -426,7 +436,7 @@ export default function ContractEdit() {
               <Field label="金額基準" hint="月額・年額＝定額／従量・手入力＝変動（毎月実績入力）">
                 <Select value={form.amount_basis} onChange={(v) => upd('amount_basis', v || null)} options={options('amount_basis')} />
               </Field>
-              <Field label="初回請求日"><input type="date" value={form.first_billing_date ?? ''} onChange={(e) => upd('first_billing_date', e.target.value || null)} /></Field>
+              <Field label="初回請求日"><DateInput value={form.first_billing_date} onChange={(v) => upd('first_billing_date', v)} /></Field>
               {isCycle && (
                 <>
                   <Field label="年払い 支払月" hint={form.billing_cycle === '半年' ? 'この月と6か月後に支払います' : undefined}>
@@ -507,7 +517,7 @@ export default function ContractEdit() {
                   )}
                 </div>
               </Field>
-              <Field label="備考2" wide><input value={form.note2 ?? ''} onChange={(e) => upd('note2', e.target.value)} /></Field>
+              <Field label="備考" wide><textarea rows={2} value={form.note2 ?? ''} onChange={(e) => upd('note2', e.target.value || null)} /></Field>
             </div>
           </section>
         </fieldset>

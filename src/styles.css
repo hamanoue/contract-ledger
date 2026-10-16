@@ -246,3 +246,11 @@ table.diff .new { color: var(--ok); font-weight: 600; }
   .field.wide { grid-column: auto; }
   .filters .search { width: 100%; }
 }
+
+/* 日付の直接入力（DateInput） */
+.date-input { position: relative; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.date-input > input:first-child { flex: 1; min-width: 0; }
+.date-input.invalid > input:first-child { border-color: var(--bad); }
+.date-input-picker { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.field-error { flex-basis: 100%; font-size: 11px; color: var(--bad); }
+.field-note { font-size: 12px; color: var(--text-2); }

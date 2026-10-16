@@ -30,10 +30,30 @@ export const daysUntil = (iso: string | null): number | null => {
   return Math.round((t - today.getTime()) / 86400000)
 }
 
+/**
+ * 手入力の日付を 'YYYY-MM-DD' に直す。空なら null、読めなければ undefined。
+ * 受け付ける形：2026/10/1・2026-10-01・2026.10.1・2026年10月1日・20261001・10/1（今年）
+ */
+export const parseDateInput = (text: string): string | null | undefined => {
+  const s = text.normalize('NFKC').trim()
+  if (!s) return null
+  let y: number, m: number, d: number
+  let r: RegExpMatchArray | null
+  if ((r = s.match(/^(\d{4})[/\-.年](\d{1,2})[/\-.月](\d{1,2})日?$/))) [y, m, d] = [Number(r[1]), Number(r[2]), Number(r[3])]
+  else if ((r = s.match(/^(\d{4})(\d{2})(\d{2})$/))) [y, m, d] = [Number(r[1]), Number(r[2]), Number(r[3])]
+  else if ((r = s.match(/^(\d{1,2})[/\-.月](\d{1,2})日?$/))) [y, m, d] = [new Date().getFullYear(), Number(r[1]), Number(r[2])]
+  else return undefined
+  const dt = new Date(y, m - 1, d)
+  if (dt.getFullYear() !== y || dt.getMonth() !== m - 1 || dt.getDate() !== d) return undefined
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+/** n か月前の同じ日（その月に無い日は月末）。ローカル日付で計算する（toISOString は UTC になり1日ずれるため使わない） */
 export const subtractMonths = (iso: string, n: number): string => {
-  const d = new Date(iso + 'T00:00:00')
-  d.setMonth(d.getMonth() - n)
-  return d.toISOString().slice(0, 10)
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+  const first = new Date(y, m - 1 - n, 1)
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()
+  return `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`
 }
 
 export const toNumberOrNull = (v: string): number | null => {

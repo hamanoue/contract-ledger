@@ -5,7 +5,7 @@ import { useSession } from '../lib/session'
 import type { JournalEntry } from '../lib/types'
 import { ENTRY_TYPE_LABEL } from '../lib/types'
 import { addMonths, dateJa, downloadBlob, fromMonthInput, monthLabel, monthStart, toMonthInput, yen } from '../lib/format'
-import { AccountSelect, Badge, Empty, ErrorBox, Field, Loading, MoneyInput, Notice, PageHeader, Select } from '../components/ui'
+import { AccountSelect, Badge, DateInput, Empty, ErrorBox, Field, Loading, MoneyInput, Notice, PageHeader, Select } from '../components/ui'
 
 export default function Journals() {
   const s = useSession()
@@ -239,7 +239,7 @@ function AdjustForm({ period, onDone }: { period: string; onDone: () => void }) 
       <p className="muted small">経過勘定残高の調整に使います。契約IDを入れると、その契約の残高に反映されます。</p>
       <ErrorBox error={error} />
       <div className="grid">
-        <Field label="日付"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+        <Field label="日付"><DateInput value={date || null} onChange={(v) => setDate(v ?? '')} /></Field>
         <Field label="契約ID（任意）"><input className="mono" value={contractNo} onChange={(e) => setContractNo(e.target.value)} /></Field>
         <Field label="部門（物件コード）">
           <Select value={dept} onChange={setDept} options={masters.properties.map((p) => ({ value: p.code, label: `${p.code} ${p.name}` }))} />

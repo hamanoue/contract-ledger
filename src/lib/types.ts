@@ -66,6 +66,7 @@ export interface Contract {
   contract_name: string
   department: string | null
   person_in_charge: string | null
+  trade_note: string | null
   signed_date: string | null
   service_start: string | null
   service_end: string | null
@@ -236,12 +237,13 @@ export const FIELD_LABELS: Record<string, string> = {
   contract_name: '契約名',
   department: '契約担当部門',
   person_in_charge: '契約担当者',
+  trade_note: '備考（取引・管理）',
   signed_date: '契約締結日',
   service_start: 'サービス開始日',
   service_end: 'サービス終了日',
   cancel_date: '解約日',
   renewal_type: '更新区分',
-  renewal_notice: '解約通知期限',
+  renewal_notice: '解約通知の方法・条件',
   notice_months: '解約通知（か月前）',
   first_billing_date: '初回請求日',
   billing_cycle: '請求サイクル',
@@ -252,7 +254,7 @@ export const FIELD_LABELS: Record<string, string> = {
   amount_excl: '税抜契約金額',
   tax_amount: '消費税',
   amount_incl: '税込契約金額',
-  note: '備考',
+  note: '備考（請求・金額）',
   tax_code: '税区分',
   invoice_type: 'インボイス区分',
   recognition_method: '計上方式',
@@ -266,5 +268,5 @@ export const FIELD_LABELS: Record<string, string> = {
   accounting_only: '総務経理部のみ閲覧',
   ringi_no: '稟議書NO',
   contract_url: '契約書URL',
-  note2: '備考2',
+  note2: '備考（管理・証憑）',
 }

@@ -6,3 +6,4 @@ dist
 supabase/seed/*.sql
 *.xlsx
 *.tsbuildinfo
+supabase/.temp/
