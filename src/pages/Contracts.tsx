@@ -53,7 +53,6 @@ export default function Contracts() {
   const composing = useRef(false)
   const prop = params.get('property') ?? ''
   const status = params.get('status') ?? ''
-  const active = params.get('active') ?? '有効'
   const target = params.get('target') ?? ''
   const term = params.get('term') ?? ''
   const latest = params.get('latest') !== '0'
@@ -91,8 +90,6 @@ export default function Contracts() {
       if (latest && r.version !== maxVer.get(r.contract_no)) return false
       if (prop && String(r.property_code) !== prop) return false
       if (status && r.status !== status) return false
-      if (active === '有効' && !r.is_active) return false
-      if (active === '無効' && r.is_active) return false
       if (target && r.calc_target !== target) return false
       if (term && termInfo(r).kind !== term) return false
       if (words.length) {
@@ -103,7 +100,7 @@ export default function Contracts() {
       }
       return true
     })
-  }, [rows, q, prop, status, active, target, term, latest])
+  }, [rows, q, prop, status, target, term, latest])
 
   const totals = useMemo(() => {
     let m = 0
@@ -157,7 +154,6 @@ export default function Contracts() {
           options={masters.properties.map((p) => ({ value: p.code, label: `${p.code} ${p.name}` }))}
         />
         <Select value={status} onChange={(v) => set('status', v)} placeholder="すべての状態" options={options('status')} />
-        <Select value={active} onChange={(v) => set('active', v || 'all')} placeholder="有効・無効" options={[{ value: '有効', label: '有効のみ' }, { value: '無効', label: '無効のみ' }, { value: 'all', label: '有効・無効すべて' }]} />
         <Select value={target} onChange={(v) => set('target', v)} placeholder="計上対象：すべて" options={['対象', '要設定', '対象外']} />
         <Select value={term} onChange={(v) => set('term', v)} placeholder="契約期間：すべて"
           options={(['active', 'auto', 'expired', 'cancel', 'none'] as TermKind[]).map((k) => ({ value: k, label: TERM_KIND_LABEL[k] }))} />
@@ -204,10 +200,7 @@ export default function Contracts() {
                   </td>
                   <td className="ellipsis" title={r.vendor_name ?? ''}>{r.vendor_name}</td>
                   <td className="ellipsis" title={r.contract_name}>{r.contract_name}</td>
-                  <td className="nowrap">
-                    <Badge tone={judgementTone(r.status)}>{r.status}</Badge>
-                    {!r.is_active && <span className="tag" title="有効フラグが「無効」：月次の計上・仕訳を作りません">無効</span>}
-                  </td>
+                  <td><Badge tone={judgementTone(r.status)}>{r.status}</Badge></td>
                   <td className="nowrap small">{[r.billing_cycle, r.payment_timing].filter(Boolean).join('／')}</td>
                   <td className="nowrap small">{r.amount_basis}</td>
                   <td className="r mono">{yen(r.amount_excl)}</td>
