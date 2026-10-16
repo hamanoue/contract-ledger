@@ -46,14 +46,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe()
   }, [])
 
+  // 別タブから戻ったときやトークン更新のたびに session オブジェクトは作り直される。
+  // それで読み込み直すと画面全体が「読み込み中」になり入力中の内容が消えるため、
+  // ログインしている人（user id）が変わったときだけ読み込む
+  const userId = session?.user.id ?? null
+
   const reloadProfile = useCallback(async () => {
-    if (!session) {
+    if (!userId) {
       setProfile(null)
       return
     }
-    const res = await supabase.from('ct_profiles').select('*').eq('user_id', session.user.id).maybeSingle()
+    const res = await supabase.from('ct_profiles').select('*').eq('user_id', userId).maybeSingle()
     setProfile((res.data as Profile | null) ?? null)
-  }, [session])
+  }, [userId])
 
   const reloadMasters = useCallback(async () => {
     const [p, a, v, t, c, s] = await Promise.all([
@@ -75,7 +80,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (!session) {
+    if (!userId) {
       setProfile(null)
       setMasters(empty)
       return
@@ -85,7 +90,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .then(() => reloadMasters())
       .catch(() => undefined)
       .finally(() => setLoading(false))
-  }, [session, reloadProfile, reloadMasters])
+  }, [userId, reloadProfile, reloadMasters])
 
   const value = useMemo<SessionState>(() => {
     const propMap = new Map(masters.properties.map((p) => [p.code, p.name]))
