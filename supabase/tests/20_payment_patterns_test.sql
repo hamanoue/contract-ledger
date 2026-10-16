@@ -24,10 +24,14 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a
 
 -- 改定：新しい枝番の金額を変更
 do $$
-declare v_new bigint;
+declare v_new bigint; v_note text;
 begin
+  update ct_contracts set trade_note = '窓口：警備課' where contract_no = 1200005 and version = 1;
   select ct_create_revision(id, '2028-01-01') into v_new from ct_contracts where contract_no = 1200005 and version = 1;
   update ct_contracts set amount_excl = 20000, tax_amount = 2000 where id = v_new;
+  -- 改定しても備考（取引・管理）は引き継ぐ
+  select trade_note into v_note from ct_contracts_v where id = v_new;
+  if v_note is distinct from '窓口：警備課' then raise exception '改定で備考（取引・管理）が引き継がれていない: %', v_note; end if;
 end $$;
 
 select ct_generate_month(d::date) from generate_series('2027-10-01'::date, '2028-04-01', '1 month') d;
