@@ -74,6 +74,7 @@ export interface Contract {
   renewal_type: string | null
   renewal_notice: string | null
   notice_months: number | null
+  renewal_term_months: number | null
   first_billing_date: string | null
   billing_cycle: string | null
   payment_timing: string | null
@@ -245,6 +246,7 @@ export const FIELD_LABELS: Record<string, string> = {
   renewal_type: '更新区分',
   renewal_notice: '解約通知の方法・条件',
   notice_months: '解約通知（か月前）',
+  renewal_term_months: '更新期間（か月）',
   first_billing_date: '初回請求日',
   billing_cycle: '請求サイクル',
   payment_timing: '当月分支払月',

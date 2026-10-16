@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "test:db": "node scripts/test-db.mjs"
+    "test:db": "node scripts/test-db.mjs",
+    "test:unit": "node --experimental-strip-types scripts/unit.test.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
