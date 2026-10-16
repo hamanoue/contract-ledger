@@ -6,10 +6,11 @@ import type { ContractView } from '../lib/types'
 import { dateJa, daysUntil, monthLabel, monthStart, subtractMonths, yen } from '../lib/format'
 import { Badge, ErrorBox, Loading, PageHeader, Stat } from '../components/ui'
 import { fetchContracts } from './Contracts'
+import { termInfo } from '../lib/term'
 
 interface Alert {
   c: ContractView
-  kind: '解約通知期限' | '契約終了'
+  kind: '解約通知期限' | '契約終了' | '自動更新日' | '期限切れ'
   date: string
   days: number
 }
@@ -39,15 +40,20 @@ export default function Dashboard() {
     const alerts: Alert[] = []
     live.forEach((r) => {
       if (r.version !== maxVer.get(r.contract_no)) return
-      const end = r.cancel_date ?? r.service_end
-      if (!end) return
-      if (r.notice_months != null && !r.cancel_date) {
-        const deadline = subtractMonths(end, r.notice_months)
+      // 自動更新中は「今期の終了日（次回更新日）」で判定する
+      const t = termInfo(r)
+      if (!t.date) return
+      if (t.kind === 'expired') {
+        alerts.push({ c: r, kind: '期限切れ', date: t.date, days: daysUntil(t.date)! })
+        return
+      }
+      if (r.notice_months != null && t.kind !== 'cancel') {
+        const deadline = subtractMonths(t.date, r.notice_months)
         const d = daysUntil(deadline)!
         if (d <= 60 && d >= -30) alerts.push({ c: r, kind: '解約通知期限', date: deadline, days: d })
       }
-      const d2 = daysUntil(end)!
-      if (d2 <= 90 && d2 >= -30) alerts.push({ c: r, kind: '契約終了', date: end, days: d2 })
+      const d2 = daysUntil(t.date)!
+      if (d2 <= 90 && d2 >= -30) alerts.push({ c: r, kind: t.kind === 'auto' ? '自動更新日' : '契約終了', date: t.date, days: d2 })
     })
     alerts.sort((a, b) => a.days - b.days)
     return {
@@ -86,7 +92,7 @@ export default function Dashboard() {
 
           <div className="two-col">
             <section className="card">
-              <h2>更新・解約の期限（60〜90日以内）</h2>
+              <h2>更新・解約の期限（60〜90日以内）・期限切れ</h2>
               {stats.alerts.length === 0 ? (
                 <p className="muted">直近の期限はありません。解約通知の「何か月前」とサービス終了日を入れると、ここに表示されます。</p>
               ) : (
@@ -98,7 +104,8 @@ export default function Dashboard() {
                         <td className="nowrap">
                           {dateJa(a.date)} <Badge tone={a.days < 0 ? 'bad' : a.days <= 30 ? 'warn' : 'neutral'}>{a.days < 0 ? `${-a.days}日超過` : `あと${a.days}日`}</Badge>
                         </td>
-                        <td className="nowrap">{a.kind}</td>
+                        <td className={`nowrap${a.kind === '期限切れ' ? ' danger-text' : ''}`}
+                          title={a.kind === '期限切れ' ? '自動更新ではない契約で、サービス終了日を過ぎています。更新・解約の状況を確認してください' : undefined}>{a.kind}</td>
                         <td className="nowrap">{a.c.property_name}</td>
                         <td><Link to={`/contracts/${a.c.id}`}>{a.c.contract_name}</Link><div className="muted small">{a.c.vendor_name}</div></td>
                         <td className="nowrap small">{a.c.renewal_type}</td>

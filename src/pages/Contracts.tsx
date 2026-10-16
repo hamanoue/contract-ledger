@@ -5,6 +5,28 @@ import { useSession } from '../lib/session'
 import type { ContractView } from '../lib/types'
 import { dateJa, downloadCsvUtf8, yen } from '../lib/format'
 import { Badge, Empty, ErrorBox, Loading, PageHeader, Select, judgementTone } from '../components/ui'
+import { TERM_KIND_LABEL, TERM_SOURCE_LABEL, termInfo, type TermKind } from '../lib/term'
+
+/** 終了日の欄：何の日付かが分かるように表示する */
+function TermCell({ c }: { c: ContractView }) {
+  const t = termInfo(c)
+  switch (t.kind) {
+    case 'none':
+      return <span className="muted">—</span>
+    case 'cancel':
+      return <span title="解約日">解約 {dateJa(t.date)}</span>
+    case 'expired':
+      return <span className="danger-text" title="自動更新ではない契約で、サービス終了日を過ぎています">期限切れ {dateJa(t.date)}</span>
+    case 'auto':
+      return (
+        <span title={`今期の終了日（次回更新日）。元の終了日 ${dateJa(t.originalEnd)}、${t.termMonths}か月ごとに自動更新（${TERM_SOURCE_LABEL[t.termSource!]}）`}>
+          {dateJa(t.date)} <span className="tag">自動更新</span>
+        </span>
+      )
+    default:
+      return <span title="サービス終了日">{dateJa(t.date)}</span>
+  }
+}
 
 export async function fetchContracts(): Promise<ContractView[]> {
   const res = await supabase
@@ -33,6 +55,7 @@ export default function Contracts() {
   const status = params.get('status') ?? ''
   const active = params.get('active') ?? '有効'
   const target = params.get('target') ?? ''
+  const term = params.get('term') ?? ''
   const latest = params.get('latest') !== '0'
 
   const set = (k: string, v: string) => {
@@ -71,6 +94,7 @@ export default function Contracts() {
       if (active === '有効' && !r.is_active) return false
       if (active === '無効' && r.is_active) return false
       if (target && r.calc_target !== target) return false
+      if (term && termInfo(r).kind !== term) return false
       if (words.length) {
         const hay = [r.contract_no, r.vendor_name, r.vendor_code, r.contract_name, r.property_name, r.pl_account_name, r.note, r.ringi_no]
           .join(' ')
@@ -79,7 +103,7 @@ export default function Contracts() {
       }
       return true
     })
-  }, [rows, q, prop, status, active, target, latest])
+  }, [rows, q, prop, status, active, target, term, latest])
 
   const totals = useMemo(() => {
     let m = 0
@@ -94,13 +118,17 @@ export default function Contracts() {
   }, [filtered])
 
   function exportCsv() {
-    const head = ['契約ID', '枝番', '有効', '契約状態', '物件コード', '物件名', '取引先コード', '取引先名', '契約名', '請求サイクル', '支払月', '金額基準', '税抜金額', '消費税', '税込金額', '月額換算(税抜)', '年額換算(税抜)', '損益科目', '相手科目', 'サービス開始日', 'サービス終了日', '解約日', '更新区分', '計上対象', '確認事項']
-    const body = filtered.map((r) => [
-      r.contract_no, r.version, r.is_active ? '有効' : '無効', r.status, r.property_code, r.property_name, r.vendor_code, r.vendor_name,
-      r.contract_name, r.billing_cycle, r.payment_timing, r.amount_basis, r.amount_excl, r.tax_amount, r.amount_incl,
-      r.monthly_excl, r.annual_excl, r.pl_account_name, r.counter_account_name, r.service_start, r.service_end, r.cancel_date,
-      r.renewal_type, r.calc_target, r.issues,
-    ])
+    const head = ['契約ID', '枝番', '有効', '契約状態', '物件コード', '物件名', '取引先コード', '取引先名', '契約名', '請求サイクル', '支払月', '金額基準', '税抜金額', '消費税', '税込金額', '月額換算(税抜)', '年額換算(税抜)', '損益科目', '相手科目', 'サービス開始日', 'サービス終了日', '解約日', '更新区分', '更新期間(か月)', '期間の状況', '今期の終了日', '計上対象', '確認事項']
+    const body = filtered.map((r) => {
+      const t = termInfo(r)
+      return [
+        r.contract_no, r.version, r.is_active ? '有効' : '無効', r.status, r.property_code, r.property_name, r.vendor_code, r.vendor_name,
+        r.contract_name, r.billing_cycle, r.payment_timing, r.amount_basis, r.amount_excl, r.tax_amount, r.amount_incl,
+        r.monthly_excl, r.annual_excl, r.pl_account_name, r.counter_account_name, r.service_start, r.service_end, r.cancel_date,
+        r.renewal_type, t.termMonths ?? r.renewal_term_months, TERM_KIND_LABEL[t.kind], t.kind === 'auto' || t.kind === 'active' ? t.date : '',
+        r.calc_target, r.issues,
+      ]
+    })
     downloadCsvUtf8([head, ...body], `契約一覧_${new Date().toISOString().slice(0, 10)}.csv`)
   }
 
@@ -131,6 +159,8 @@ export default function Contracts() {
         <Select value={status} onChange={(v) => set('status', v)} placeholder="すべての状態" options={options('status')} />
         <Select value={active} onChange={(v) => set('active', v || 'all')} placeholder="有効・無効" options={[{ value: '有効', label: '有効のみ' }, { value: '無効', label: '無効のみ' }, { value: 'all', label: '有効・無効すべて' }]} />
         <Select value={target} onChange={(v) => set('target', v)} placeholder="計上対象：すべて" options={['対象', '要設定', '対象外']} />
+        <Select value={term} onChange={(v) => set('term', v)} placeholder="契約期間：すべて"
+          options={(['active', 'auto', 'expired', 'cancel', 'none'] as TermKind[]).map((k) => ({ value: k, label: TERM_KIND_LABEL[k] }))} />
         <label className="check">
           <input type="checkbox" checked={latest} onChange={(e) => set('latest', e.target.checked ? '' : '0')} />
           最新の枝番のみ
@@ -156,7 +186,7 @@ export default function Contracts() {
                 <th className="r">月額換算</th>
                 <th>損益科目</th>
                 <th>相手科目</th>
-                <th>終了日</th>
+                <th title="解約日／今期の終了日（自動更新中は次回更新日）">終了日</th>
                 <th>計上</th>
               </tr>
             </thead>
@@ -181,7 +211,7 @@ export default function Contracts() {
                   <td className="r mono">{yen(r.monthly_excl)}</td>
                   <td className="nowrap small">{r.pl_account_name}</td>
                   <td className="nowrap small">{r.counter_account_name}</td>
-                  <td className="nowrap small">{dateJa(r.cancel_date ?? r.service_end)}</td>
+                  <td className="nowrap small"><TermCell c={r} /></td>
                   <td title={r.issues ?? ''}>
                     <Badge tone={judgementTone(r.calc_target)}>{r.calc_target}</Badge>
                   </td>

@@ -6,6 +6,7 @@ import type { Allocation, Contract, ContractItem, HistoryRow } from '../lib/type
 import { FIELD_LABELS } from '../lib/types'
 import { dateJa, subtractMonths, yen } from '../lib/format'
 import { useUnsavedGuard } from '../lib/useUnsavedGuard'
+import { TERM_SOURCE_LABEL, termInfo } from '../lib/term'
 import { AccountSelect, Badge, DateInput, ErrorBox, Field, Loading, MoneyInput, Notice, PageHeader, Select, judgementTone } from '../components/ui'
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `${i + 1}月` }))
@@ -165,9 +166,21 @@ export default function ContractEdit() {
 
   const allocTotal = allocs.reduce((a, b) => a + Number(b.amount_excl || 0), 0)
   const isCycle = form.billing_cycle === '年次' || form.billing_cycle === '半年'
-  const noticeDeadline = form.service_end && form.notice_months != null
-    ? `${dateJa(subtractMonths(form.service_end, form.notice_months))}（終了日 ${dateJa(form.service_end)} の${form.notice_months}か月前）`
+  // 自動更新中は「今期の終了日（次回更新日）」を基準にする
+  const term = termInfo({
+    cancel_date: form.cancel_date ?? null, service_start: form.service_start ?? null,
+    service_end: form.service_end ?? null, renewal_type: form.renewal_type ?? null, renewal_term_months: form.renewal_term_months ?? null,
+  })
+  const termEnd = term.kind === 'active' || term.kind === 'auto' ? term.date : null
+  const noticeDeadline = termEnd && form.notice_months != null
+    ? `${dateJa(subtractMonths(termEnd, form.notice_months))}（${term.kind === 'auto' ? '今期の終了日' : '終了日'} ${dateJa(termEnd)} の${form.notice_months}か月前）`
     : null
+  const termNote =
+    term.kind === 'auto' ? `${dateJa(term.date)}（元の終了日 ${dateJa(term.originalEnd)} から ${term.termMonths}か月ごとに自動更新・${TERM_SOURCE_LABEL[term.termSource!]}）`
+    : term.kind === 'active' ? `${dateJa(term.date)}（期間内）`
+    : term.kind === 'expired' ? `${dateJa(term.date)} で終了済み（自動更新ではないため、更新・解約の状況を確認してください）`
+    : term.kind === 'cancel' ? `解約日 ${dateJa(term.date)}`
+    : 'サービス終了日を入れると表示します'
   const issues = useMemo(() => {
     const out: string[] = []
     if ((form.status === '解約予定' || form.status === '解約済') && !form.cancel_date) out.push('解約日を入力してください')
@@ -440,6 +453,16 @@ export default function ContractEdit() {
               <Field label="解約日" hint="解約予定・解約済の場合は必須"><DateInput value={form.cancel_date} onChange={(v) => upd('cancel_date', v)} /></Field>
               <Field label="更新区分">
                 <Select value={form.renewal_type} onChange={(v) => upd('renewal_type', v || null)} options={options('renewal_type')} />
+              </Field>
+              {form.renewal_type === '自動更新' && (
+                <Field label="更新期間（何か月ごと）" hint="空欄なら開始日〜終了日の長さ、それも無ければ12か月">
+                  <input type="number" min={1} max={120} value={form.renewal_term_months ?? ''}
+                    placeholder={term.kind === 'auto' && term.termSource !== 'input' ? String(term.termMonths) : '12'}
+                    onChange={(e) => upd('renewal_term_months', e.target.value ? Number(e.target.value) : null)} />
+                </Field>
+              )}
+              <Field label="今期の終了日（自動計算）" wide>
+                <span className={`field-note${term.kind === 'expired' ? ' danger-text' : ''}`}>{termNote}</span>
               </Field>
               <Field label="解約通知（何か月前）" hint="期限日を自動計算し、ダッシュボードで通知します">
                 <input type="number" min={0} max={36} value={form.notice_months ?? ''} onChange={(e) => upd('notice_months', e.target.value ? Number(e.target.value) : null)} />
