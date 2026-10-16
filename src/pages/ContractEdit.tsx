@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase, check } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import type { Allocation, Contract, ContractItem, HistoryRow } from '../lib/types'
 import { FIELD_LABELS } from '../lib/types'
 import { dateJa, subtractMonths, yen } from '../lib/format'
+import { useUnsavedGuard } from '../lib/useUnsavedGuard'
 import { AccountSelect, Badge, DateInput, ErrorBox, Field, Loading, MoneyInput, Notice, PageHeader, Select, judgementTone } from '../components/ui'
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({ value: i + 1, label: `${i + 1}月` }))
@@ -51,6 +52,15 @@ function suggestCounter(c: Partial<Contract>): number | null {
 
 const EDITABLE_KEYS = Object.keys(FIELD_LABELS).filter((k) => k !== 'amount_incl') as (keyof Contract)[]
 
+/** 未保存の変更の判定に使う、入力内容の写し（自動で決まる契約ID・閲覧制限は除く。空文字は未入力と同じ扱い） */
+const blankToNull = (v: unknown) => (v === '' || v === undefined ? null : v)
+const snapshotOf = (f: Partial<Contract>, a: Allocation[], it: ContractItem[]) =>
+  JSON.stringify({
+    f: EDITABLE_KEYS.filter((k) => k !== 'contract_no' && k !== 'accounting_only').map((k) => blankToNull(f[k])),
+    a: a.map((x) => [x.property_code, blankToNull(x.label), Number(x.amount_excl || 0)]),
+    it: it.map((x) => [blankToNull(x.item_name), blankToNull(x.amount_excl), blankToNull(x.note)]),
+  })
+
 export default function ContractEdit() {
   const { id } = useParams()
   const isNew = !id
@@ -73,8 +83,14 @@ export default function ContractEdit() {
   const [showRev, setShowRev] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  // 読み込み・保存した時点の内容。これと違えば「未保存の変更あり」
+  const baseline = useRef(snapshotOf(blank(), [], []))
+  const dirty = !loading && snapshotOf(form, allocs, items) !== baseline.current
+  const { allowNextLeave } = useUnsavedGuard(dirty)
+
   useEffect(() => {
     if (isNew) {
+      baseline.current = snapshotOf(blank(), [], [])
       setForm(blank())
       setAllocs([])
       setItems([])
@@ -94,6 +110,7 @@ export default function ContractEdit() {
           supabase.from('ct_contract_history').select('*').eq('contract_no', c.contract_no).order('changed_at', { ascending: false }),
           supabase.from('ct_contracts').select('*').eq('contract_no', c.contract_no).order('version'),
         ])
+        baseline.current = snapshotOf(c, check(a) as Allocation[], check(it) as ContractItem[])
         setForm(c)
         setAllocs(check(a) as Allocation[])
         setItems(check(it) as ContractItem[])
@@ -205,8 +222,12 @@ export default function ContractEdit() {
         check(await supabase.from('ct_contract_items').insert(
           items.filter((x) => x.item_name).map((x, i) => ({ contract_id: cid, item_name: x.item_name, amount_excl: x.amount_excl, note: x.note, sort: i })),
         ))
+      baseline.current = snapshotOf(form, allocs, items)
       setSaved('保存しました')
-      if (isNew) nav(`/contracts/${cid}`, { replace: true })
+      if (isNew) {
+        allowNextLeave()
+        nav(`/contracts/${cid}`, { replace: true })
+      }
       else {
         const h = await supabase.from('ct_contract_history').select('*').eq('contract_no', form.contract_no!).order('changed_at', { ascending: false })
         setHistory((h.data as HistoryRow[]) ?? [])
@@ -239,7 +260,10 @@ export default function ContractEdit() {
     const { error } = await supabase.from('ct_contracts').delete().eq('id', form.id!)
     setBusy(false)
     if (error) setError(error.message.includes('foreign key') ? 'この契約には仕訳があるため削除できません。「無効」にしてください。' : error.message)
-    else nav('/contracts')
+    else {
+      allowNextLeave()
+      nav('/contracts')
+    }
   }
 
   if (loading) return <Loading />
@@ -267,6 +291,7 @@ export default function ContractEdit() {
             {!isNew && !readOnly && form.version === latestVersion && (
               <button onClick={() => setShowRev((v) => !v)}>改定（新しい枝番）</button>
             )}
+            {!readOnly && dirty && <span className="unsaved-badge">未保存の変更あり</span>}
             {!readOnly && (
               <button className="primary" onClick={save} disabled={busy}>
                 {busy ? '保存中…' : '保存'}
