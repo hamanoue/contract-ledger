@@ -1,4 +1,4 @@
-import { HashRouter, Navigate, NavLink, Route, Routes } from 'react-router-dom'
+import { createHashRouter, Navigate, NavLink, Route, RouterProvider, Routes } from 'react-router-dom'
 import { SessionProvider, useSession } from './lib/session'
 import { isConfigured, supabase } from './lib/supabase'
 import { Loading } from './components/ui'
@@ -29,12 +29,14 @@ export default function App() {
   }
   return (
     <SessionProvider>
-      <HashRouter>
-        <Shell />
-      </HashRouter>
+      <RouterProvider router={router} />
     </SessionProvider>
   )
 }
+
+// 画面の定義は Shell 内の <Routes> に置いたまま、データルーターで包む
+// （未保存の変更がある画面で移動を確認する useBlocker はデータルーターでしか使えない）
+const router = createHashRouter([{ path: '*', element: <Shell /> }])
 
 function Shell() {
   const { session, profile, loading, isAccounting, isAdmin } = useSession()
