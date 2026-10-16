@@ -192,7 +192,7 @@ export default function Contracts() {
             </thead>
             <tbody>
               {filtered.map((r) => (
-                <tr key={r.id} className={`clickable${r.is_active ? '' : ' dim'}`} onClick={() => nav(`/contracts/${r.id}`)}>
+                <tr key={r.id} className={`clickable${r.status === '解約済' || r.status === '停止' ? ' dim' : ''}`} onClick={() => nav(`/contracts/${r.id}`)}>
                   <td className="mono nowrap">
                     {r.contract_no}
                     <span className="ver">-{r.version}</span>
@@ -204,7 +204,10 @@ export default function Contracts() {
                   </td>
                   <td className="ellipsis" title={r.vendor_name ?? ''}>{r.vendor_name}</td>
                   <td className="ellipsis" title={r.contract_name}>{r.contract_name}</td>
-                  <td><Badge tone={judgementTone(r.status)}>{r.status}</Badge></td>
+                  <td className="nowrap">
+                    <Badge tone={judgementTone(r.status)}>{r.status}</Badge>
+                    {!r.is_active && <span className="tag" title="有効フラグが「無効」：月次の計上・仕訳を作りません">無効</span>}
+                  </td>
                   <td className="nowrap small">{[r.billing_cycle, r.payment_timing].filter(Boolean).join('／')}</td>
                   <td className="nowrap small">{r.amount_basis}</td>
                   <td className="r mono">{yen(r.amount_excl)}</td>
