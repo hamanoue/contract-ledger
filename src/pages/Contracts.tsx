@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase, check } from '../lib/supabase'
 import { useSession } from '../lib/session'
@@ -24,7 +24,11 @@ export default function Contracts() {
   const [rows, setRows] = useState<ContractView[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const q = params.get('q') ?? ''
+  // 検索語は入力欄のローカル状態で持つ。URL と直結すると、日本語入力（IME）の変換中に
+  // 値が読み戻されて変換が崩れるため、URL への反映は変換確定後に少し遅らせて行う
+  const urlQ = params.get('q') ?? ''
+  const [q, setQ] = useState(urlQ)
+  const composing = useRef(false)
   const prop = params.get('property') ?? ''
   const status = params.get('status') ?? ''
   const active = params.get('active') ?? '有効'
@@ -41,6 +45,19 @@ export default function Contracts() {
   useEffect(() => {
     fetchContracts().then(setRows).catch((e) => setError(e.message))
   }, [])
+
+  // 入力が止まってから URL に書き込む（戻る・リンク共有で検索語を残すため）
+  useEffect(() => {
+    if (composing.current || q === urlQ) return
+    const t = setTimeout(() => set('q', q), 400)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q])
+
+  // 戻る・進むなどで URL 側が変わったときは入力欄に反映する
+  useEffect(() => {
+    if (!composing.current) setQ(urlQ)
+  }, [urlQ])
 
   const filtered = useMemo(() => {
     if (!rows) return []
@@ -101,7 +118,10 @@ export default function Contracts() {
       />
       <ErrorBox error={error} />
       <div className="filters">
-        <input className="search" placeholder="検索（取引先・契約名・契約ID・稟議NO）" value={q} onChange={(e) => set('q', e.target.value)} />
+        <input className="search" placeholder="検索（取引先・契約名・契約ID・稟議NO）" value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onCompositionStart={() => { composing.current = true }}
+          onCompositionEnd={(e) => { composing.current = false; setQ(e.currentTarget.value) }} />
         <Select
           value={prop}
           onChange={(v) => set('property', v)}
